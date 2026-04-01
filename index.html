@@ -3,89 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狙い撃ち爆音コール</title>
+    <title>狙い撃ち通知：GOD</title>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <style>
         body { text-align: center; font-family: sans-serif; background: #0d1117; color: white; padding-top: 50px; }
         .card { background: #161b22; border: 1px solid #30363d; padding: 20px; border-radius: 15px; display: inline-block; width: 90%; max-width: 400px; }
         input { width: 80%; padding: 12px; margin: 10px; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: white; }
-        button { padding: 15px; font-size: 18px; cursor: pointer; background: #ff4757; color: white; border: none; border-radius: 12px; width: 80%; font-weight: bold; margin: 10px; }
-        .user-item { background: #21262d; padding: 15px; margin: 10px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #ff4757; }
+        button { padding: 15px; font-size: 18px; cursor: pointer; background: #58a6ff; color: white; border: none; border-radius: 12px; width: 80%; font-weight: bold; margin: 10px; }
+        .user-item { background: #21262d; padding: 15px; margin: 10px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #58a6ff; }
         .push-btn { width: auto; padding: 8px 20px; background: #238636; margin: 0; }
-        #status { color: #8b949e; margin-bottom: 20px; }
+        #status { color: #8b949e; margin-bottom: 20px; font-size: 14px; }
         .hidden { display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h1>🚨 狙い撃ち通知</h1>
-        <div id="status">準備中...</div>
+        <h1>🔔 TARGET PUSH</h1>
+        <div id="status">システム起動中...</div>
 
         <div id="login-section" class="hidden">
             <input type="text" id="username" placeholder="名前を入力" maxlength="10">
-            <button onclick="doLogin()">入室（名前を保存）</button>
+            <button onclick="doLogin()">入室 ＆ 通知許可</button>
         </div>
 
         <div id="main-section" class="hidden">
-            <div id="user-list">他の人を待っています...</div>
-            <button style="background:#444; font-size:12px; padding:5px;" onclick="logout()">名前をやり直す</button>
+            <div id="user-list">ユーザーを探しています...</div>
+            <button style="background:#444; font-size:12px; padding:5px; margin-top:20px; width:auto;" onclick="logout()">名前を変更</button>
         </div>
     </div>
 
     <script>
-        // --- 追加：裏方（サービスワーカー）を登録する ---
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-    .then(() => console.log('裏方（SW）の登録完了！'))
-    .catch(err => console.error('SW登録エラー:', err));
-}
-// ------------------------------------------
-
-// 既存のFirebase設定などはそのままでOK！
-// ただし、通知を出す関数を少し改造します
-
-function showNotification(fromName) {
-    if (Notification.permission === "granted") {
-        // ロック画面にも出しやすくする「裏方経由」の通知
-        navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification("🔔 呼び出し", {
-                body: fromName + "さんが呼んでいます！",
-                tag: "call-notification", // 重複防止
-                renotify: true
-            });
-        });
-    } else {
-        alert("🔔 " + fromName + "さんから呼ばれています！");
-    }
-}
-
+        // --- Firebase設定 ---
         const firebaseConfig = {
-            databaseURL: "https://game-server-df061-default-rtdb.firebaseio.com/"
+            apiKey: "AIzaSyAfjTWeL71syzo7SNpym7ATcbrq6i7JfXQ",
+            authDomain: "game-server-df061.firebaseapp.com",
+            databaseURL: "https://game-server-df061-default-rtdb.firebaseio.com",
+            projectId: "game-server-df061",
+            storageBucket: "game-server-df061.firebasestorage.app",
+            messagingSenderId: "475396427934",
+            appId: "1:475396427934:web:5106a6210aa51e3b8f6b8f"
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const auth = firebase.auth();
 
-        // 音源
-        const bell = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
         let myName = "";
 
-        // 1. オートセーブ確認
+        // --- 裏方（サービスワーカー）の登録 ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+
+        // 1. ページ読み込み（オートセーブ確認）
         window.onload = () => {
-            const saved = localStorage.getItem('my_push_id');
-            if (saved) {
-                startApp(saved);
+            const savedName = localStorage.getItem('my_push_id');
+            if (savedName) {
+                auth.signInAnonymously().then(() => startApp(savedName));
             } else {
+                document.getElementById('status').innerText = "名前を入力してください";
                 document.getElementById('login-section').classList.remove('hidden');
             }
         };
 
+        // 2. ログイン処理
         function doLogin() {
             const name = document.getElementById('username').value.trim();
             if (!name) return alert("名前を入れて！");
-            localStorage.setItem('my_push_id', name);
-            startApp(name);
+            
+            // 通知の許可を求める
+            if ("Notification" in window) {
+                Notification.requestPermission();
+            }
+
+            auth.signInAnonymously().then(() => {
+                localStorage.setItem('my_push_id', name);
+                startApp(name);
+            });
         }
 
         function logout() {
@@ -93,61 +89,70 @@ function showNotification(fromName) {
             location.reload();
         }
 
+        // 3. メインシステム起動（ここが名簿のロジック！）
         function startApp(name) {
             myName = name;
             document.getElementById('login-section').classList.add('hidden');
             document.getElementById('main-section').classList.remove('hidden');
-            document.getElementById('status').innerText = "あなたの名前: " + myName;
+            document.getElementById('status').innerText = "ログイン中: " + myName;
 
-            // 2. 名簿に自分を登録
+            // 自分の存在を名簿に書く（閉じたら消す）
             db.ref('active_users/' + myName).set(true);
-            // ウインドウを閉じたら名簿から消去
             db.ref('active_users/' + myName).onDisconnect().remove();
 
-            // 3. 名簿（他人数）のリアルタイム更新
+            // ★名簿のリアルタイム更新（ここをしっかり直しました！）
             db.ref('active_users').on('value', (snap) => {
                 const listEl = document.getElementById('user-list');
                 listEl.innerHTML = "";
                 const users = snap.val();
+                
                 if (users) {
                     for (let user in users) {
-                        if (user === myName) continue;
+                        if (user === myName) continue; // 自分は出さない
                         const div = document.createElement('div');
                         div.className = 'user-item';
-                        div.innerHTML = `<span>${user}</span><button class="push-btn" onclick="sendPush('${user}')">呼ぶ！</button>`;
+                        div.innerHTML = `<span>${user}</span><button class="push-btn" onclick="sendPush('${user}')">通知</button>`;
                         listEl.appendChild(div);
                     }
                 }
                 if (listEl.innerHTML === "") listEl.innerHTML = "今、誰もいません...";
             });
 
-            // 4. 自分宛ての通知（音）を監視
+            // 自分への通知を監視
             db.ref('calls/' + myName).on('value', (snap) => {
-                if (snap.val()) {
-                    playBell();
-                    // 通知を確認したらリセット
-                    setTimeout(() => db.ref('calls/' + myName).set(false), 1000);
+                const data = snap.val();
+                if (data && data.time > Date.now() - 5000) {
+                    showNotification(data.from);
                 }
             });
         }
 
-        function playBell() {
-            bell.currentTime = 0;
-            bell.play().catch(() => {
-                document.getElementById('status').innerText = "⚠️画面をタップして音を許可！";
-            });
-        }
-
+        // 4. 通知を送る
         function sendPush(target) {
-            db.ref('calls/' + target).set(true);
-            alert(target + "さんを呼びました！");
+            db.ref('calls/' + target).set({
+                from: myName,
+                time: Date.now()
+            });
+            alert(target + "さんに通知を送りました！");
         }
 
-        // 最初のタップで音を有効化
-        document.body.addEventListener('click', () => {
-            bell.load();
-            document.getElementById('status').innerText = "オンライン: " + myName;
-        });
+        // 5. 通知を表示する（LINE風）
+        function showNotification(fromName) {
+            const title = "🔔 呼び出し";
+            const options = {
+                body: fromName + "さんから呼ばれています！",
+                icon: "https://cdn-icons-png.flaticon.com/512/179/179386.png"
+            };
+
+            if (Notification.permission === "granted") {
+                // サービスワーカーを使って通知を出す（ロック画面対応）
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification(title, options);
+                });
+            } else {
+                alert(fromName + "さんから呼ばれています！");
+            }
+        }
     </script>
 </body>
 </html>
