@@ -57,11 +57,29 @@
   const db = firebase.database();
   const auth = firebase.auth();
 
-  // 1. Googleログイン処理
-  document.getElementById('login-btn').onclick = () => {
+  // Googleログイン処理
+  document.getElementById('login-btn').onclick = (e) => {
+    e.preventDefault(); // 余計な動きを止める
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithRedirect(provider); // iPhoneでも動きやすいリダイレクト方式
+    
+    // iPhoneで最も確実な「画面切り替え方式」
+    // これで動かない場合は、Firebaseの「承認済みドメイン」設定ミスが濃厚です
+    auth.signInWithRedirect(provider);
   };
+
+  // ログインから戻ってきた時の処理（これが必要！）
+  auth.getRedirectResult().then((result) => {
+    if (result.user) {
+      console.log("ログイン成功:", result.user.displayName);
+      showMain(result.user);
+    }
+  }).catch((error) => {
+    console.error("ログインエラー:", error.message);
+    if(error.code === 'auth/unauthorized-domain') {
+       alert("Firebaseの設定で 'base-layer-code.github.io' を承認済みドメインに追加してください！");
+    }
+  });
+
 
   // ログイン状態の監視
   auth.onAuthStateChanged(user => {
