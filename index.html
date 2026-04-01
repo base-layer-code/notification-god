@@ -35,6 +35,32 @@
     </div>
 
     <script>
+        // --- 追加：裏方（サービスワーカー）を登録する ---
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+    .then(() => console.log('裏方（SW）の登録完了！'))
+    .catch(err => console.error('SW登録エラー:', err));
+}
+// ------------------------------------------
+
+// 既存のFirebase設定などはそのままでOK！
+// ただし、通知を出す関数を少し改造します
+
+function showNotification(fromName) {
+    if (Notification.permission === "granted") {
+        // ロック画面にも出しやすくする「裏方経由」の通知
+        navigator.serviceWorker.ready.then(registration => {
+            registration.showNotification("🔔 呼び出し", {
+                body: fromName + "さんが呼んでいます！",
+                tag: "call-notification", // 重複防止
+                renotify: true
+            });
+        });
+    } else {
+        alert("🔔 " + fromName + "さんから呼ばれています！");
+    }
+}
+
         const firebaseConfig = {
             databaseURL: "https://game-server-df061-default-rtdb.firebaseio.com/"
         };
