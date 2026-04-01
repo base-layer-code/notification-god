@@ -3,38 +3,46 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GOD NOTICE</title>
+  <title>BOSS: Targeted Push</title>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <style>
-    body { background: #0d1117; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-    .card { background: #161b22; border: 1px solid #30363d; padding: 20px; border-radius: 12px; width: 100%; max-width: 350px; text-align: center; }
-    button { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; background: #58a6ff; color: white; }
-    .user-item { background: #21262d; padding: 10px; margin: 5px 0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-    .push-btn { width: auto; padding: 5px 15px; background: #238636; }
+    :root { --accent: #4285f4; --bg: #0d1117; --panel: #161b22; }
+    body { font-family: sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+    
+    .card { background: var(--panel); border: 1px solid #30363d; padding: 25px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; }
+    button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
+    
+    #login-btn { background: white; color: #444; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .user-item { background: #21262d; padding: 10px; margin: 5px 0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d; }
+    .push-btn { width: auto; padding: 5px 15px; background: var(--accent); color: white; margin: 0; }
+    
+    #user-info { margin-bottom: 20px; font-size: 0.9rem; color: #8b949e; }
     .hidden { display: none; }
   </style>
 </head>
 <body>
 
 <div class="card">
-  <h2>TARGET PUSH</h2>
+  <h1>Targeted Notice</h1>
   
   <div id="login-section">
-    <button id="login-btn">Googleでログイン</button>
-    <p style="font-size: 12px; color: #8b949e;">※反応しない場合はSafariで開き直してください</p>
+    <p>特定の相手に通知を送るにはログインが必要です</p>
+    <button id="login-btn">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> Googleでログイン
+    </button>
   </div>
 
   <div id="main-section" class="hidden">
-    <p id="user-display" style="color: #8b949e;"></p>
-    <h3>送信先リスト</h3>
-    <div id="user-list">読込中...</div>
+    <div id="user-info">ログイン中: <span id="my-name"></span></div>
+    <hr style="border:0; border-top:1px solid #30363d;">
+    <h3>通知を送る相手を選択</h3>
+    <div id="user-list">ユーザーを探しています...</div>
   </div>
 </div>
 
 <script>
-  // ★自分のFirebase設定に貼り替えてください！
   const firebaseConfig = {
     apiKey: "AIzaSyAfjTWeL71syzo7SNpym7ATcbrq6i7JfXQ",
     authDomain: "game-server-df061.firebaseapp.com",
@@ -49,68 +57,74 @@
   const db = firebase.database();
   const auth = firebase.auth();
 
-  // ログインボタンの処理
+  // 1. Googleログイン処理
   document.getElementById('login-btn').onclick = () => {
     const provider = new firebase.auth.GoogleAuthProvider();
-    // iPhoneで最も確実なRedirect方式
-    auth.signInWithRedirect(provider);
+    auth.signInWithRedirect(provider); // iPhoneでも動きやすいリダイレクト方式
   };
 
   // ログイン状態の監視
   auth.onAuthStateChanged(user => {
     if (user) {
-      document.getElementById('login-section').classList.add('hidden');
-      document.getElementById('main-section').classList.remove('hidden');
-      document.getElementById('user-display').innerText = "Login: " + user.displayName;
-      setupApp(user);
+      showMain(user);
+    } else {
+      document.getElementById('login-section').classList.remove('hidden');
+      document.getElementById('main-section').classList.add('hidden');
     }
   });
 
-  function setupApp(user) {
+  function showMain(user) {
+    document.getElementById('login-section').classList.add('hidden');
+    document.getElementById('main-section').classList.remove('hidden');
+    document.getElementById('my-name').innerText = user.displayName;
+
+    // 2. 名簿に自分を登録 (メールアドレスのドットはFirebaseで使えないのでカンマに置換)
     const safeEmail = user.email.replace(/\./g, ',');
-    
-    // 自分の情報を登録
     db.ref('users/' + safeEmail).set({
       name: user.displayName,
-      email: user.email
+      email: user.email,
+      lastSeen: Date.now()
     });
 
-    // 通知の許可（画面をどこか触った時に発動）
-    document.body.addEventListener('click', () => {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
-    }, { once: true });
+    // 通知の許可
+    Notification.requestPermission();
 
-    // ユーザーリスト表示
+    // 3. 名簿（ユーザーリスト）の表示
     db.ref('users').on('value', snap => {
       const listEl = document.getElementById('user-list');
       listEl.innerHTML = "";
       const users = snap.val();
       for (let id in users) {
-        if (users[id].email === user.email) continue;
+        if (users[id].email === user.email) continue; // 自分は表示しない
+
         const div = document.createElement('div');
         div.className = 'user-item';
-        div.innerHTML = `<span>${users[id].name}</span><button class="push-btn" onclick="sendPush('${id}')">PUSH</button>`;
+        div.innerHTML = `
+          <span>${users[id].name}</span>
+          <button class="push-btn" onclick="sendPush('${id}')">PUSH</button>
+        `;
         listEl.appendChild(div);
       }
     });
 
-    // 自分宛の通知を監視
+    // 4. 自分宛ての通知を監視
     db.ref('notifications/' + safeEmail).on('value', snap => {
       const data = snap.val();
-      if (data && data.time > Date.now() - 10000) {
-        new Notification("⚠️ 呼び出し", { body: data.from + "さんから通知です！" });
+      if (data && data.timestamp > Date.now() - 5000) { // 5秒以内の新しい通知のみ
+        new Notification("⚠️ 宛先指定通知", {
+          body: data.from + "さんからあなたへメッセージです！"
+        });
       }
     });
   }
 
+  // 5. 狙い撃ち送信
   window.sendPush = (targetId) => {
     db.ref('notifications/' + targetId).set({
       from: auth.currentUser.displayName,
-      time: Date.now()
+      timestamp: Date.now()
     });
-    alert("送信完了！");
+    alert("送信しました！");
   };
 </script>
 
