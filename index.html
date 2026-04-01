@@ -1,127 +1,127 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AUTO-SAVE PUSH</title>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <style>
-    :root { --accent: #00d1b2; --bg: #0d1117; --panel: #161b22; }
-    body { font-family: sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
-    .card { background: var(--panel); border: 1px solid #30363d; padding: 25px; border-radius: 15px; width: 100%; max-width: 350px; text-align: center; }
-    input { width: 80%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: white; }
-    button { width: 100%; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; background: var(--accent); color: white; }
-    .user-item { background: #21262d; padding: 12px; margin: 8px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
-    .push-btn { width: auto; padding: 6px 15px; background: #30363d; }
-    .hidden { display: none; }
-    #status { font-size: 0.8rem; color: #8b949e; margin-bottom: 15px; }
-    .logout-link { font-size: 0.7rem; color: #f85149; text-decoration: underline; cursor: pointer; margin-top: 20px; display: inline-block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狙い撃ち爆音コール</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        body { text-align: center; font-family: sans-serif; background: #0d1117; color: white; padding-top: 50px; }
+        .card { background: #161b22; border: 1px solid #30363d; padding: 20px; border-radius: 15px; display: inline-block; width: 90%; max-width: 400px; }
+        input { width: 80%; padding: 12px; margin: 10px; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: white; }
+        button { padding: 15px; font-size: 18px; cursor: pointer; background: #ff4757; color: white; border: none; border-radius: 12px; width: 80%; font-weight: bold; margin: 10px; }
+        .user-item { background: #21262d; padding: 15px; margin: 10px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #ff4757; }
+        .push-btn { width: auto; padding: 8px 20px; background: #238636; margin: 0; }
+        #status { color: #8b949e; margin-bottom: 20px; }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
 
-<div class="card">
-  <h2>TARGET PUSH</h2>
-  <div id="status">読み込み中...</div>
+    <div class="card">
+        <h1>🚨 狙い撃ち通知</h1>
+        <div id="status">準備中...</div>
 
-  <div id="login-section" class="hidden">
-    <input type="text" id="username" placeholder="名前を入力（保存されます）" maxlength="10">
-    <button id="login-btn">入室＆保存</button>
-  </div>
+        <div id="login-section" class="hidden">
+            <input type="text" id="username" placeholder="名前を入力" maxlength="10">
+            <button onclick="doLogin()">入室（名前を保存）</button>
+        </div>
 
-  <div id="main-section" class="hidden">
-    <div id="user-list">待機中...</div>
-    <span class="logout-link" onclick="logout()">名前を消してやり直す</span>
-  </div>
-</div>
+        <div id="main-section" class="hidden">
+            <div id="user-list">他の人を待っています...</div>
+            <button style="background:#444; font-size:12px; padding:5px;" onclick="logout()">名前をやり直す</button>
+        </div>
+    </div>
 
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyAfjTWeL71syzo7SNpym7ATcbrq6i7JfXQ",
-    authDomain: "game-server-df061.firebaseapp.com",
-    databaseURL: "https://game-server-df061-default-rtdb.firebaseio.com",
-    projectId: "game-server-df061",
-    storageBucket: "game-server-df061.firebasestorage.app",
-    messagingSenderId: "475396427934",
-    appId: "1:475396427934:web:5106a6210aa51e3b8f6b8f"
-  };
+    <script>
+        const firebaseConfig = {
+            databaseURL: "https://game-server-df061-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-  let myName = "";
+        // 音源
+        const bell = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+        let myName = "";
 
-  // --- 【オートセーブ機能】ページ読み込み時に保存された名前をチェック ---
-  window.onload = () => {
-    const savedName = localStorage.getItem('saved_push_name');
-    if (savedName) {
-      login(savedName);
-    } else {
-      document.getElementById('login-section').classList.remove('hidden');
-      document.getElementById('status').innerText = "ログインしてください";
-    }
-  };
+        // 1. オートセーブ確認
+        window.onload = () => {
+            const saved = localStorage.getItem('my_push_id');
+            if (saved) {
+                startApp(saved);
+            } else {
+                document.getElementById('login-section').classList.remove('hidden');
+            }
+        };
 
-  // 入室ボタンクリック
-  document.getElementById('login-btn').onclick = () => {
-    const input = document.getElementById('username').value.trim();
-    if (!input) return alert("名前を入力してください");
-    
-    // ブラウザに保存（オートセーブ）
-    localStorage.setItem('saved_push_name', input);
-    login(input);
-  };
+        function doLogin() {
+            const name = document.getElementById('username').value.trim();
+            if (!name) return alert("名前を入れて！");
+            localStorage.setItem('my_push_id', name);
+            startApp(name);
+        }
 
-  function login(name) {
-    myName = name;
-    document.getElementById('login-section').classList.add('hidden');
-    document.getElementById('main-section').classList.remove('hidden');
-    document.getElementById('status').innerText = "ログイン中: " + myName;
-    startApp();
-  }
+        function logout() {
+            localStorage.removeItem('my_push_id');
+            location.reload();
+        }
 
-  // 名前を消去（ログアウト）
-  window.logout = () => {
-    localStorage.removeItem('saved_push_name');
-    location.reload();
-  };
+        function startApp(name) {
+            myName = name;
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('main-section').classList.remove('hidden');
+            document.getElementById('status').innerText = "あなたの名前: " + myName;
 
-  function startApp() {
-    // 通知許可の催促
-    if ("Notification" in window) Notification.requestPermission();
+            // 2. 名簿に自分を登録
+            db.ref('active_users/' + myName).set(true);
+            // ウインドウを閉じたら名簿から消去
+            db.ref('active_users/' + myName).onDisconnect().remove();
 
-    // 名簿登録
-    db.ref('active_users/' + myName).set({ last_seen: Date.now() });
+            // 3. 名簿（他人数）のリアルタイム更新
+            db.ref('active_users').on('value', (snap) => {
+                const listEl = document.getElementById('user-list');
+                listEl.innerHTML = "";
+                const users = snap.val();
+                if (users) {
+                    for (let user in users) {
+                        if (user === myName) continue;
+                        const div = document.createElement('div');
+                        div.className = 'user-item';
+                        div.innerHTML = `<span>${user}</span><button class="push-btn" onclick="sendPush('${user}')">呼ぶ！</button>`;
+                        listEl.appendChild(div);
+                    }
+                }
+                if (listEl.innerHTML === "") listEl.innerHTML = "今、誰もいません...";
+            });
 
-    // 名簿表示
-    db.ref('active_users').on('value', snap => {
-      const listEl = document.getElementById('user-list');
-      listEl.innerHTML = "";
-      const users = snap.val();
-      for (let name in users) {
-        if (name === myName) continue;
-        const div = document.createElement('div');
-        div.className = 'user-item';
-        div.innerHTML = `<span>${name}</span><button class="push-btn" onclick="sendPush('${name}')">PUSH</button>`;
-        listEl.appendChild(div);
-      }
-      if (!listEl.innerHTML) listEl.innerHTML = "他の待機者はいません";
-    });
+            // 4. 自分宛ての通知（音）を監視
+            db.ref('calls/' + myName).on('value', (snap) => {
+                if (snap.val()) {
+                    playBell();
+                    // 通知を確認したらリセット
+                    setTimeout(() => db.ref('calls/' + myName).set(false), 1000);
+                }
+            });
+        }
 
-    // 通知受信
-    db.ref('alerts/' + myName).on('value', snap => {
-      const data = snap.val();
-      if (data && data.time > Date.now() - 5000) {
-        new Notification("🚨 呼び出し", { body: data.from + "さんが呼んでいます！" });
-      }
-    });
-  }
+        function playBell() {
+            bell.currentTime = 0;
+            bell.play().catch(() => {
+                document.getElementById('status').innerText = "⚠️画面をタップして音を許可！";
+            });
+        }
 
-  window.sendPush = (targetName) => {
-    db.ref('alerts/' + targetName).set({ from: myName, time: Date.now() });
-    alert(targetName + "に送信しました");
-  };
-</script>
+        function sendPush(target) {
+            db.ref('calls/' + target).set(true);
+            alert(target + "さんを呼びました！");
+        }
 
+        // 最初のタップで音を有効化
+        document.body.addEventListener('click', () => {
+            bell.load();
+            document.getElementById('status').innerText = "オンライン: " + myName;
+        });
+    </script>
 </body>
 </html>
