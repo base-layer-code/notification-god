@@ -57,11 +57,19 @@
   const db = firebase.database();
   const auth = firebase.auth();
 
-  // 1. Googleログイン処理
+   // Googleログイン処理（Popup方式に修正）
   document.getElementById('login-btn').onclick = () => {
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithRedirect(provider); // iPhoneでも動きやすいリダイレクト方式
+    // ここを Popup に変えるのがコツです
+    auth.signInWithPopup(provider).then(() => {
+      console.log("ログイン成功");
+    }).catch(err => {
+      console.error("エラー:", err);
+      // ポップアップがブロックされた時の予備
+      auth.signInWithRedirect(provider);
+    });
   };
+
 
   // ログイン状態の監視
   auth.onAuthStateChanged(user => {
