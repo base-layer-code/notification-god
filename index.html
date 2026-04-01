@@ -17,6 +17,12 @@
         #status { color: #8b949e; margin-bottom: 20px; font-size: 14px; }
         .hidden { display: none; }
     </style>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GOD PUSH">
+
+<link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/179/179386.png">
+
 </head>
 <body>
 
@@ -121,7 +127,7 @@
             // 自分への通知を監視
             db.ref('calls/' + myName).on('value', (snap) => {
                 const data = snap.val();
-                if (data && data.time > Date.now() - 5000) {
+                if (data && data.time > Date.now() - 30000) {
                     showNotification(data.from);
                 }
             });
@@ -136,23 +142,26 @@
             alert(target + "さんに通知を送りました！");
         }
 
-        // 5. 通知を表示する（LINE風）
-        function showNotification(fromName) {
-            const title = "🔔 呼び出し";
-            const options = {
-                body: fromName + "さんから呼ばれています！",
-                icon: "https://cdn-icons-png.flaticon.com/512/179/179386.png"
-            };
+ // --- 通知を表示する機能（ここを強化） ---
+function showNotification(fromName) {
+    console.log("通知を表示しようとしています:", fromName);
+    const title = "🔔 呼び出し";
+    const options = {
+        body: fromName + "さんから呼ばれています！",
+        icon: "https://cdn-icons-png.flaticon.com/512/179/179386.png",
+        tag: "call-" + Date.now(), // 毎回違うIDにする
+        renotify: true
+    };
 
-            if (Notification.permission === "granted") {
-                // サービスワーカーを使って通知を出す（ロック画面対応）
-                navigator.serviceWorker.ready.then(reg => {
-                    reg.showNotification(title, options);
-                });
-            } else {
-                alert(fromName + "さんから呼ばれています！");
-            }
-        }
+    if (Notification.permission === "granted") {
+        navigator.serviceWorker.ready.then(reg => {
+            reg.showNotification(title, options);
+        });
+    } else {
+        // 許可がない場合は画面に直接出す（最後の手段）
+        alert("【通知】" + fromName + "さんが呼んでいます！");
+    }
+}       
     </script>
 </body>
 </html>
