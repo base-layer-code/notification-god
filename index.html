@@ -3,42 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BOSS: Targeted Push</title>
+  <title>AUTO-SAVE PUSH</title>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <style>
-    :root { --accent: #4285f4; --bg: #0d1117; --panel: #161b22; }
-    body { font-family: sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-    
-    .card { background: var(--panel); border: 1px solid #30363d; padding: 25px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; }
-    button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
-    
-    #login-btn { background: white; color: #444; display: flex; align-items: center; justify-content: center; gap: 10px; }
-    .user-item { background: #21262d; padding: 10px; margin: 5px 0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d; }
-    .push-btn { width: auto; padding: 5px 15px; background: var(--accent); color: white; margin: 0; }
-    
-    #user-info { margin-bottom: 20px; font-size: 0.9rem; color: #8b949e; }
+    :root { --accent: #00d1b2; --bg: #0d1117; --panel: #161b22; }
+    body { font-family: sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+    .card { background: var(--panel); border: 1px solid #30363d; padding: 25px; border-radius: 15px; width: 100%; max-width: 350px; text-align: center; }
+    input { width: 80%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: white; }
+    button { width: 100%; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; background: var(--accent); color: white; }
+    .user-item { background: #21262d; padding: 12px; margin: 8px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
+    .push-btn { width: auto; padding: 6px 15px; background: #30363d; }
     .hidden { display: none; }
+    #status { font-size: 0.8rem; color: #8b949e; margin-bottom: 15px; }
+    .logout-link { font-size: 0.7rem; color: #f85149; text-decoration: underline; cursor: pointer; margin-top: 20px; display: inline-block; }
   </style>
 </head>
 <body>
 
 <div class="card">
-  <h1>Targeted Notice</h1>
-  
-  <div id="login-section">
-    <p>特定の相手に通知を送るにはログインが必要です</p>
-    <button id="login-btn">
-      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> Googleでログイン
-    </button>
+  <h2>TARGET PUSH</h2>
+  <div id="status">読み込み中...</div>
+
+  <div id="login-section" class="hidden">
+    <input type="text" id="username" placeholder="名前を入力（保存されます）" maxlength="10">
+    <button id="login-btn">入室＆保存</button>
   </div>
 
   <div id="main-section" class="hidden">
-    <div id="user-info">ログイン中: <span id="my-name"></span></div>
-    <hr style="border:0; border-top:1px solid #30363d;">
-    <h3>通知を送る相手を選択</h3>
-    <div id="user-list">ユーザーを探しています...</div>
+    <div id="user-list">待機中...</div>
+    <span class="logout-link" onclick="logout()">名前を消してやり直す</span>
   </div>
 </div>
 
@@ -55,94 +49,77 @@
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
-  const auth = firebase.auth();
+  let myName = "";
 
-  // Googleログイン処理
-  document.getElementById('login-btn').onclick = (e) => {
-    e.preventDefault(); // 余計な動きを止める
-    const provider = new firebase.auth.GoogleAuthProvider();
-    
-    // iPhoneで最も確実な「画面切り替え方式」
-    // これで動かない場合は、Firebaseの「承認済みドメイン」設定ミスが濃厚です
-    auth.signInWithRedirect(provider);
-  };
-
-  // ログインから戻ってきた時の処理（これが必要！）
-  auth.getRedirectResult().then((result) => {
-    if (result.user) {
-      console.log("ログイン成功:", result.user.displayName);
-      showMain(result.user);
-    }
-  }).catch((error) => {
-    console.error("ログインエラー:", error.message);
-    if(error.code === 'auth/unauthorized-domain') {
-       alert("Firebaseの設定で 'base-layer-code.github.io' を承認済みドメインに追加してください！");
-    }
-  });
-
-
-  // ログイン状態の監視
-  auth.onAuthStateChanged(user => {
-    if (user) {
-      showMain(user);
+  // --- 【オートセーブ機能】ページ読み込み時に保存された名前をチェック ---
+  window.onload = () => {
+    const savedName = localStorage.getItem('saved_push_name');
+    if (savedName) {
+      login(savedName);
     } else {
       document.getElementById('login-section').classList.remove('hidden');
-      document.getElementById('main-section').classList.add('hidden');
+      document.getElementById('status').innerText = "ログインしてください";
     }
-  });
+  };
 
-  function showMain(user) {
+  // 入室ボタンクリック
+  document.getElementById('login-btn').onclick = () => {
+    const input = document.getElementById('username').value.trim();
+    if (!input) return alert("名前を入力してください");
+    
+    // ブラウザに保存（オートセーブ）
+    localStorage.setItem('saved_push_name', input);
+    login(input);
+  };
+
+  function login(name) {
+    myName = name;
     document.getElementById('login-section').classList.add('hidden');
     document.getElementById('main-section').classList.remove('hidden');
-    document.getElementById('my-name').innerText = user.displayName;
+    document.getElementById('status').innerText = "ログイン中: " + myName;
+    startApp();
+  }
 
-    // 2. 名簿に自分を登録 (メールアドレスのドットはFirebaseで使えないのでカンマに置換)
-    const safeEmail = user.email.replace(/\./g, ',');
-    db.ref('users/' + safeEmail).set({
-      name: user.displayName,
-      email: user.email,
-      lastSeen: Date.now()
-    });
+  // 名前を消去（ログアウト）
+  window.logout = () => {
+    localStorage.removeItem('saved_push_name');
+    location.reload();
+  };
 
-    // 通知の許可
-    Notification.requestPermission();
+  function startApp() {
+    // 通知許可の催促
+    if ("Notification" in window) Notification.requestPermission();
 
-    // 3. 名簿（ユーザーリスト）の表示
-    db.ref('users').on('value', snap => {
+    // 名簿登録
+    db.ref('active_users/' + myName).set({ last_seen: Date.now() });
+
+    // 名簿表示
+    db.ref('active_users').on('value', snap => {
       const listEl = document.getElementById('user-list');
       listEl.innerHTML = "";
       const users = snap.val();
-      for (let id in users) {
-        if (users[id].email === user.email) continue; // 自分は表示しない
-
+      for (let name in users) {
+        if (name === myName) continue;
         const div = document.createElement('div');
         div.className = 'user-item';
-        div.innerHTML = `
-          <span>${users[id].name}</span>
-          <button class="push-btn" onclick="sendPush('${id}')">PUSH</button>
-        `;
+        div.innerHTML = `<span>${name}</span><button class="push-btn" onclick="sendPush('${name}')">PUSH</button>`;
         listEl.appendChild(div);
       }
+      if (!listEl.innerHTML) listEl.innerHTML = "他の待機者はいません";
     });
 
-    // 4. 自分宛ての通知を監視
-    db.ref('notifications/' + safeEmail).on('value', snap => {
+    // 通知受信
+    db.ref('alerts/' + myName).on('value', snap => {
       const data = snap.val();
-      if (data && data.timestamp > Date.now() - 5000) { // 5秒以内の新しい通知のみ
-        new Notification("⚠️ 宛先指定通知", {
-          body: data.from + "さんからあなたへメッセージです！"
-        });
+      if (data && data.time > Date.now() - 5000) {
+        new Notification("🚨 呼び出し", { body: data.from + "さんが呼んでいます！" });
       }
     });
   }
 
-  // 5. 狙い撃ち送信
-  window.sendPush = (targetId) => {
-    db.ref('notifications/' + targetId).set({
-      from: auth.currentUser.displayName,
-      timestamp: Date.now()
-    });
-    alert("送信しました！");
+  window.sendPush = (targetName) => {
+    db.ref('alerts/' + targetName).set({ from: myName, time: Date.now() });
+    alert(targetName + "に送信しました");
   };
 </script>
 
